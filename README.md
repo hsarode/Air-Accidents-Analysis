@@ -54,6 +54,7 @@ We start off with donut charts on the top right-hand side. The donut charts repr
 ### Line Graph
 
 The line graph at the bottom right of the dashboard displays the number of crashes and deaths per year. Brushing is applied on the line graph and a user can brush on any time-period in the line graph.
+
 ![image](https://user-images.githubusercontent.com/88155960/180512019-0501783d-7e8c-4ac1-b6a7-127795796c99.png)
 
 Brushing on the line graph also filters the bar charts to display the data between the selected time period only. For instance in the above example, we have brushed over the area between 1985 to 2005. Thus, all our bar graphs will also filter to display data only between 1985 and 2005. This is useful if one wants to analyse crashes between specific year ranges.
@@ -63,6 +64,7 @@ Brushing on the line graph also filters the bar charts to display the data betwe
 
 All the bar graphs have interactivity embedded into them. Whenever a bar is hovered upon in any graph, bars that represent data from the same category are highlighted in the other 2 graphs as well. All the other bars fade. Upon mouseover, the data that the bar represents is also displayed on top of the bar for all the highlighted bars.
 Whenever any bar is clicked upon, they line graph at the bottom right of the dashboard filters to show the crashes and deaths from the selected category only. For instance, in the above picture, we have selected “Descent” which indicates crashes and fatality rate when the aircraft is lowering altitude to land. When this bar is clicked upon, the bottom right graph filters to display crashes and deaths only from “Descent” stage of flight as seen below. The light blue line indicates deaths, and the dark blue line indicates crashes.
+
 ![image](https://user-images.githubusercontent.com/88155960/180513697-9da0547b-2828-4d46-98d8-2e5af4753c45.png)
 
 ### Line graph – after click event on bar
