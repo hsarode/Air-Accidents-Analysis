@@ -1,5 +1,5 @@
 
-# Air Accidents Analysis using D3
+# Aviation Safety Analysis using D3
 ![image](https://user-images.githubusercontent.com/88155960/180510661-49b0c0b6-cd6b-4ce0-ac57-0126f83dfe00.png)
 
 Two datasets from kaggle are used to display the visualization and 
