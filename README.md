@@ -1,5 +1,7 @@
 
 # Air Accidents Analysis using D3
+![image](https://user-images.githubusercontent.com/88155960/180509644-1a9dfe85-df92-4551-8c6b-8f36a0108193.png)
+
 Two datasets from kaggle are used to display the visualization and 
 can be found at [Dataset 1](https://www.kaggle.com/datasets/khsamaha/aviation-accident-database-synopses)
 and [Dataset 2](https://www.kaggle.com/datasets/saurograndi/airplane-crashes-since-1908).
