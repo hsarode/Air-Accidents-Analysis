@@ -69,7 +69,11 @@ Whenever any bar is clicked upon, they line graph at the bottom right of the das
 
 ### Line graph – after click event on bar
 
-![image](https://user-images.githubusercontent.com/88155960/180513883-344d3b62-ad55-4b44-90b6-d98fc54b4d3c.png)
+<!-- ![image](https://user-images.githubusercontent.com/88155960/180513883-344d3b62-ad55-4b44-90b6-d98fc54b4d3c.png) -->
+<p align="center">
+  <img width="460" height="300" src="[http://www.fillmurray.com/460/300](https://user-images.githubusercontent.com/88155960/180513883-344d3b62-ad55-4b44-90b6-d98fc54b4d3c.png)">
+</p>
+
 
 The newly generated line graph is also interactive. The data from each year is marked with a circle to easily access that information. Whenever mouse if hovered upon any of the circle, it is highlighted and the same circle from the other line is also highlighted. Also, the data point of that circle is displayed as text above the circle on mouseover.
 
