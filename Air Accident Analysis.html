@@ -1,0 +1,938 @@
+<html lang="en">
+<head>
+<script src='https://d3js.org/d3.v7.min.js'></script>
+<script src="https://d3js.org/d3-scale-chromatic.v1.min.js"></script>
+<script src="https://d3js.org/d3-geo-projection.v2.min.js"></script>
+
+</head>
+<svg width="100%" height="100%" id="first"></svg>
+<body bgcolor="#e9ecef">
+    <script>
+        Promise.all([d3.csv("crashes1.csv"),
+                    d3.csv("crashes22.csv")])
+                    .then(function(all_data){
+            data = all_data[0]
+            data1 = all_data[1]
+            crashes_color = '#023e8a'       // color of the line graph for crashes
+            fatalities_color = '#ade8f4'    // color of the line graph for fatalities
+            section_color = '#FFFFFF'       // color of each block of graph - white color
+            var parseDate = d3.timeParse("%Y%m%d");     // convert string ISO date to date time object in js
+            var newa = Array.from(d3.group(data, d => d.Event_date), ([key, value]) => ({key, value}))      // group the csv data by date to filter data by date in visualizations
+            // Below are various arrays defined that store data for each type of plot. this is done instead of manually getting data from the csv as data generation can be put
+            // in a function each of these arrays can be updated at once for the data between the required time period.
+            var date_wise_crashes = new Array(), year_wise_crashes = new Array(), year_wise_crashes1 = new Array(), fatalities_per_type_of_flight = new Array(),
+            survival_rate_per_type_of_flight = new Array(), day_wise_crashes = new Array(), accident_by_type = new Array(), accident_by_phase_of_flight = new Array(),
+            accident_by_engine = new Array(), month_wise_crashes = new Array(), fatalities_per_carrier = new Array(), fatalities_per_carrier_per_crash = new Array(),
+            crashes_per_carrier = new Array(), crashes_per_type_of_flight = new Array(), fatalities_per_phase_of_flight_per_crash = new Array(), fatalities_per_phase_of_flight = new Array(),
+            crashes_per_phase_of_flight = new Array(), end_date= parseDate(newa[newa.length-1].value[newa[newa.length-1].value.length - 1].Event_date), start_date = parseDate('19010101');
+
+            // Here a function has been defined that generates data for all the above arrays and plots. it takes in the start date and end date as function arguements
+            // and generates data only between the dates provided. This is done to help with brushing. A user can brush over the required time period and all the plots
+            // will reflect data only from that time period defined by the user.
+            function generate_data(start_date, end_date){
+                // Clear all the arrays first to remove data stored from previous time periods
+                date_wise_crashes.length = 0, year_wise_crashes.length = 0, year_wise_crashes1.length = 0, fatalities_per_type_of_flight.length = 0, survival_rate_per_type_of_flight.length = 0,
+                day_wise_crashes.length = 0, accident_by_type.length = 0, accident_by_phase_of_flight.length = 0, accident_by_engine.length = 0, month_wise_crashes.length = 0,
+                fatalities_per_carrier.length = 0, fatalities_per_carrier_per_crash.length = 0, crashes_per_carrier.length = 0, crashes_per_type_of_flight.length = 0,
+                fatalities_per_phase_of_flight_per_crash.length = 0, fatalities_per_phase_of_flight.length = 0, crashes_per_phase_of_flight.length = 0
+
+                
+                // #################################### DATA GENERATION AND BAR CHART - DISPLAYS FATALITY GROUPED BY REASON FOR FLIGHT/ AIR CARRIER and PHASE OF FLIGHT ##################
+                var fatalities = 0, uninjured = 0;
+                for (let j = 0; j < data1.length; j++){          // iterate through each each entry for a date as there can be multiple crashes in single day
+                    if( start_date < parseDate(data1[j].Date) && parseDate(data1[j].Date) < end_date){
+                        fatalities_per_type_of_flight.push({name:'', 
+                                                            value:parseInt(data1[j].Fatalities || 0),
+                                                            value1:0,
+                                                            value2:0,
+                                                            value3:data[j].Aboard - parseInt(data1[j].Fatalities || 0),
+                                                            carrier:data[j].Operator || '',
+                                                            phase_of_flight:''
+                                                        })
+                        }
+                }
+                
+                var fatalities = 0, uninjured = 0;
+                for (let i = 0; i < newa.length; i++){      // iterate through entire array of data grouped by date
+                    current_date = parseDate(newa[i].key)       // get the current date of the iteration
+                    if( start_date < current_date && current_date < end_date){     // filter results  between the dates specified by user
+                        for (let j = 0; j < newa[i].value.length; j++){          // iterate through each each entry for a date as there can be multiple crashes in single day
+                            fatalities += parseInt(newa[i].value[j].Total_Fatal_Injuries) || 0      // if data is null, set it to 0
+                            uninjured += parseInt(newa[i].value[j].Total_Uninjured) || 0            // if data is null, set it to 0
+                            // This array stores the fatalities based per reason of flight, air carrier and phase of flight
+                            // if data is null store 0 for integer and emtpy string for categorical data
+                            fatalities_per_type_of_flight.push({name:newa[i].value[j].Purpose_of_flight, value:parseInt(newa[i].value[j].Total_Fatal_Injuries || 0),
+                                                                value1:parseInt(newa[i].value[j].Total_Uninjured || 0),
+                                                                value2:parseInt(newa[i].value[j].Total_Minor_Injuries || 0),
+                                                                value3:parseInt(newa[i].value[j].Total_Serious_Injuries || 0),
+                                                                carrier:newa[i].value[j].Air_carrier || '',
+                                                                phase_of_flight:newa[i].value[j].phase_of_flight || ''
+                                                            })
+                        }
+                    }
+                    
+                    // add the fatalities for an entire day in the above for loop and push in the below array
+                    date_wise_crashes.push({ date:parseDate(newa[i].key),
+                                                crashes:parseInt(newa[i].value.length),
+                                                fatalities:fatalities,
+                                                uninjured:uninjured
+                                            })
+                    fatalities = 0, uninjured = 0       // reset the fatalities counter to 0
+                }
+                console.log(fatalities_per_type_of_flight)
+                // group the fatalities by reason for flight, by air carrier and by phase of flight. these separate arrays will be used for each plots
+                var fatalities = Array.from(d3.group(fatalities_per_type_of_flight, d => d.name), ([key, value]) => ({key, value}))
+                var fatalities_carrier = Array.from(d3.group(fatalities_per_type_of_flight, d => d.carrier), ([key, value]) => ({key, value}))
+                var fatalities_phase_of_flight = Array.from(d3.group(fatalities_per_type_of_flight, d => d.phase_of_flight), ([key, value]) => ({key, value}))
+
+                fatalities_per_type_of_flight.length = 0        // delete the contents of main fatality array to save memory
+                // sort and slice the arrays to remove data which was null or had category set as unknown
+                fatalities_carrier.sort(function(x, y){ return d3.descending(x.value, y.value); })
+                fatalities.sort(function(x, y){ return d3.descending(x.value, y.value); })
+                fatalities.splice(2,1)
+                fatalities.splice(3,1)
+                fatalities = fatalities.slice(0,15)
+                fatalities_phase_of_flight = fatalities_phase_of_flight.slice(1,12)
+                fatalities_carrier = fatalities_carrier.slice(2,16)
+
+                // this for loop works on fatality data based on the reason for flight
+                for (let i = 0; i < fatalities.length; i++){
+                    var count = 0, total = 0    // count stores the total fatal injuries and total stores all the injuries like minor, major and uninjured
+                    if(fatalities[i].key == '' || fatalities[i].key == 'Unknown'){continue}     // filter for null or unkown category of data
+                    for (let j = 0; j < fatalities[i].value.length; j++){       // iterate through all the reasons for flight and get count and total per reason for flight
+                        count += fatalities[i].value[j].value
+                        total = total + fatalities[i].value[j].value + fatalities[i].value[j].value1 + fatalities[i].value[j].value2 + fatalities[i].value[j].value3
+                    }
+                    // push the fatalities in three arrays, the first array stores the number of fatalities per reason of flight
+                    // the second array stores the fatality rate per reason of flight. eg - on avg 20% of ppl die when an accident occurs for this reason of flight
+                    // the third array stores the number of crashes per reason of flight
+                    fatalities_per_type_of_flight.push({name:fatalities[i].key, value:count/fatalities[i].value.length})    // fatalities per type of flight per crash. in 1 crash for x type of flight has y fatality rate
+                    survival_rate_per_type_of_flight.push({name:fatalities[i].key, value:count/total})      // fatalities per type of flight. for x type of flight, the fatality rate is y
+                    crashes_per_type_of_flight.push({name:fatalities[i].key, value:fatalities[i].value.length})
+                }
+
+                // we repeat the same for loop above. this time we store fatality related data based on the air carrier
+                for (let i = 0; i < fatalities_carrier.length; i++){
+                    var count = 0, total = 0;
+                    for (let j = 0; j < fatalities_carrier[i].value.length; j++){
+                        count += fatalities_carrier[i].value[j].value
+                        total = total + fatalities_carrier[i].value[j].value + fatalities_carrier[i].value[j].value1 + fatalities_carrier[i].value[j].value2 + fatalities_carrier[i].value[j].value3
+                    }
+                    fatalities_per_carrier_per_crash.push({name:fatalities_carrier[i].key, value:count/fatalities_carrier[i].value.length})     // fatalities per carrier per crash. in 1 crash x carrier has y fatality rate
+                    fatalities_per_carrier.push({name:fatalities_carrier[i].key, value:count/total})      // fatalities per carrier. for x carrier, the fatality rate is y
+                    crashes_per_carrier.push({name:fatalities_carrier[i].key, value:fatalities_carrier[i].value.length})
+                }
+                // sort the data so it is displayed in an descending order
+                fatalities_per_carrier_per_crash.sort(function(x, y){ return d3.descending(x.value, y.value); })
+                fatalities_per_carrier.sort(function(x, y){ return d3.descending(x.value, y.value); })
+
+                // we repeat the same for loop above. this time we store fatality related data based on the air carrier
+                for (let i = 0; i < fatalities_phase_of_flight.length; i++){
+                    var count = 0
+                    var total = 0
+                    for (let j = 0; j < fatalities_phase_of_flight[i].value.length; j++){
+                        count += fatalities_phase_of_flight[i].value[j].value
+                        total = total + fatalities_phase_of_flight[i].value[j].value + fatalities_phase_of_flight[i].value[j].value1 + fatalities_phase_of_flight[i].value[j].value2 + fatalities_phase_of_flight[i].value[j].value3
+                    }
+                    crashes_per_phase_of_flight.push({name:fatalities_phase_of_flight[i].key, value:fatalities_phase_of_flight[i].value.length})
+                    fatalities_per_phase_of_flight_per_crash.push({name:fatalities_phase_of_flight[i].key, value:count/fatalities_phase_of_flight[i].value.length})     // fatalities per carrier per crash. in 1 crash x carrier has y fatality rate
+                    fatalities_per_phase_of_flight.push({name:fatalities_phase_of_flight[i].key, value:count/total})      // fatalities per carrier. for x carrier, the fatality rate is y
+                }
+                // sort the data so it is displayed in an descending order
+                crashes_per_phase_of_flight.sort(function(x, y){ return d3.descending(x.value, y.value); })
+                fatalities_per_phase_of_flight_per_crash.sort(function(x, y){ return d3.descending(x.value, y.value); })
+                fatalities_per_phase_of_flight.sort(function(x, y){ return d3.descending(x.value, y.value); })
+                fatalities_per_type_of_flight.sort(function(x, y){ return d3.descending(x.value, y.value); })
+                survival_rate_per_type_of_flight.sort(function(x, y){ return d3.descending(x.value, y.value); })
+
+                // #################################### GENERATE YEAR WISE DATA - DISPLAYS LINE GRAPH FOR CRASHES AND DEATHS PER YEAR#####################################
+                // this section groups the crashes and deaths per year. this is plotted to see the progess of crashes and deaths as time progresses
+                var year_crashes = 0, year_fatalities = 0, year_uninjured = 0;
+
+                // run a loop for each date, check if it belongs to a single year, if yes add the fatalities, if the year changes, push the added fatalities into
+                // an arrya and reset the counter. if null data is read, set it to 0
+                current_year = parseDate(data1[0].Date).getFullYear()
+
+                for (let i = 0; i < data1.length; i++){
+                    if(parseDate(data1[i].Date).getFullYear() < 1981){
+                        if(parseDate(data1[i].Date).getFullYear() == current_year){
+                            year_crashes += 1
+                            year_fatalities += data[i].Fatalities || 0
+                        }
+                        else{
+                            year_wise_crashes.push({year:parseDate(data1[i-1].Date), 
+                                                    crashes:year_crashes,
+                                                    year_fatalities:year_fatalities,
+                                                    year_uninjured:year_uninjured
+                                                })
+                            year_crashes = 0, year_fatalities = 0, current_year = parseDate(data1[i].Date).getFullYear()
+                        }
+                    }
+                    else{ continue }
+                }
+                current_year = date_wise_crashes[0].date.getFullYear()
+                year_crashes = 0
+                for (let i = 0; i < date_wise_crashes.length; i++){
+                    if(date_wise_crashes[i].date.getFullYear() == current_year){
+                        year_crashes += date_wise_crashes[i].crashes || 0
+                        year_fatalities += date_wise_crashes[i].fatalities || 0
+                        year_uninjured += date_wise_crashes[i].uninjured || 0
+                    }
+                    else{
+                        year_wise_crashes.push({year:date_wise_crashes[i-1].date, 
+                                                crashes:year_crashes,
+                                                year_fatalities:year_fatalities,
+                                                year_uninjured:year_uninjured
+                                            })
+                        year_crashes = 0, year_fatalities = 0, year_uninjured = 0, current_year = date_wise_crashes[i].date.getFullYear()
+                    }
+                }
+                // ############################################### GENERATE DAY WISE DATA - PIE CHART ###############################################
+                // initialize variables that store crashes for that day of the week. iterate through all dates, get the day and add the crashes to that day
+                var sunday = 0, monday = 0, tuesday = 0, wednesday = 0, thursday = 0, friday = 0, saturday = 0;
+                for (let i = 0; i < date_wise_crashes.length; i++){
+                    current_date = date_wise_crashes[i].date
+                    if(start_date < current_date && current_date < end_date){
+                        if(date_wise_crashes[i].date.getDay() == 0){ sunday += date_wise_crashes[i].crashes}
+                        else if(date_wise_crashes[i].date.getDay() == 0){ sunday += date_wise_crashes[i].crashes}
+                        else if(date_wise_crashes[i].date.getDay() == 1){ monday += date_wise_crashes[i].crashes}
+                        else if(date_wise_crashes[i].date.getDay() == 2){ tuesday += date_wise_crashes[i].crashes}
+                        else if(date_wise_crashes[i].date.getDay() == 3){ wednesday += date_wise_crashes[i].crashes}
+                        else if(date_wise_crashes[i].date.getDay() == 4){ thursday += date_wise_crashes[i].crashes}
+                        else if(date_wise_crashes[i].date.getDay() == 5){ friday += date_wise_crashes[i].crashes}
+                        else if(date_wise_crashes[i].date.getDay() == 6){ saturday += date_wise_crashes[i].crashes}
+                    }
+                }
+                // after iterating through entire array, push the crashes per day into an array. 2nd array is defined to display the day on the pie chart
+                day_wise_crashes.push(sunday, monday, tuesday, wednesday, thursday, friday, saturday)
+                days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+            
+                // ############################################### GENERATE MONTH WISE DATA - PIE CHART ###############################################
+                // initialize variables that store crashes for that month of the year.
+                var max_crashes_bar = 0, jan = 0, feb = 0, mar = 0, apr = 0, may = 0, jun = 0, jul = 0, aug = 0, sep = 0, oct = 0, nov = 0, dec = 0;
+                for (let i = 0; i < date_wise_crashes.length; i++){
+                    current_date = date_wise_crashes[i].date
+                        if(start_date < current_date && current_date < end_date){
+                            if(date_wise_crashes[i].date.getMonth() == 0){ jan += date_wise_crashes[i].crashes}
+                            else if(date_wise_crashes[i].date.getMonth() == 1){ feb += date_wise_crashes[i].crashes}
+                            else if(date_wise_crashes[i].date.getMonth() == 2){ mar += date_wise_crashes[i].crashes}
+                            else if(date_wise_crashes[i].date.getMonth() == 3){ apr += date_wise_crashes[i].crashes}
+                            else if(date_wise_crashes[i].date.getMonth() == 4){ may += date_wise_crashes[i].crashes}
+                            else if(date_wise_crashes[i].date.getMonth() == 5){ jun += date_wise_crashes[i].crashes}
+                            else if(date_wise_crashes[i].date.getMonth() == 6){ jul += date_wise_crashes[i].crashes}
+                            else if(date_wise_crashes[i].date.getMonth() == 7){ aug += date_wise_crashes[i].crashes}
+                            else if(date_wise_crashes[i].date.getMonth() == 8){ sep += date_wise_crashes[i].crashes}
+                            else if(date_wise_crashes[i].date.getMonth() == 9){ oct += date_wise_crashes[i].crashes}
+                            else if(date_wise_crashes[i].date.getMonth() == 10){ nov += date_wise_crashes[i].crashes}
+                            else if(date_wise_crashes[i].date.getMonth() == 11){ dec += date_wise_crashes[i].crashes}
+                    }
+                }
+                // after iterating through entire array, push the crashes per month into an array. 2nd array is defined to display the month on the pie chart
+                month_wise_crashes.push(jan, feb, mar, apr, may, jun, jul, aug, sep, oct, nov, dec)
+                months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+            }
+            // ######################################################## DATA GENERATION END ######################################################
+            generate_data(start_date, end_date)     // call the above function to generate data between the first date and last date of the csv file
+
+            // ################################################# DISPLAY THE TITLE FOR THE DASHBOARD ##############################################
+            var svg_title = d3.select("#first").append("g").attr("transform", "translate(" + 0 + "," + 0 + ")"); 
+            svg_title.append("rect").attr("x", 0).attr("y", 0).attr("height", "50").attr("width", "100%").attr("fill", crashes_color).attr("rx", 6).attr("ry", 6)
+            svg_title.append('text').text('Aviation safety analysis').attr("font-size", 35).style("fill", 'white').attr("transform", "translate(" + 20 + "," + 35 + ")");
+            
+            // ############################################### LINE PLOT FOR YEAR WISE CRASHES ###################################################
+            // initialize the svg with defined width and height, bottom_graphs var is used to position all the graphs below the main graph
+            var width1 = 500, height1 = 200, start = 60, bottom_graphs = 380+start;
+            var svg1 = d3.select("#first").append("g").attr("transform", "translate(" + 1030 + "," + bottom_graphs + ")");   // add legend to the line graphs
+            svg1.append("rect").attr("x", 0).attr("y", 0).attr("height", "300").attr("width", "500").attr("fill", section_color).attr("rx", 6).attr("ry", 6)    // add rounded rectangle around the plot to group plots
+            svg1.append("text").attr("x", 30).attr("y", 27).text("Crash History").style("font-size", 22)      // title for the line graphs
+
+            // define the scale for x axis and add it to the svg. set the date from 1901 till the last date in the dataset. start date is 1901 as data before that is null
+            var x_line = d3.scaleTime().domain([parseDate('19010101'), parseDate('20221208')]).range([0, width1-50]);
+            var xAxis = svg1.append("g").call(d3.axisBottom(x_line).ticks(4)).attr("transform", "translate(35,"+(height1+43)+")")       // add the x axis to the graph
+            
+            // set the scale for y axis and add it to the svg
+            var max_crashes = d3.max(year_wise_crashes, d => d.crashes);
+            var y_line = d3.scaleLinear().domain([max_crashes+500, 0]).range([0, height1])
+            svg1.append("g").call(d3.axisLeft(y_line).ticks(6)).attr("transform", "translate("+ 35 + "," + 42+")").transition().duration(200);   // set the color of text on y axis to the color of the line graph it is for
+            
+            var clip = svg1.append("defs").append("svg:clipPath").attr("id", "clip").append("svg:rect")       // define the area for brushing. same as area of the line graph
+                            .attr("width", width1 ).attr("height", height1+5).attr("x", 35).attr("y", 10);
+
+            // add brush to the plot, define the brush area that goes till the max width and height defined
+            var brush = d3.brushX().extent( [ [0,0], [width1, height1+13] ] ).on("end", updateChart)        // after brushing call the function update chart to change x axis and update data according to x axis
+            var line = svg1.append("g").attr("clip-path", "url(#clip)").attr("transform", "translate(0,30)")
+
+            line.append("path")          // add paths to display the line graph
+                .datum(year_wise_crashes)            // pass data generated from gen_scalar_map_data function
+                .transition().duration(200)
+                .attr("class", "crashes")       // assign it a class for easy updating later on
+                .attr("fill", "none")
+                .attr("stroke-width", 2)
+                .attr("d", d3.line()
+                    .x(function(d){ return x_line(d.year); })        // set the x position of the point for year
+                    .y(function(d){ return y_line(d.crashes); })    // set the y position of the point for crashes
+                )
+                .attr("stroke", crashes_color)
+                .attr("transform", "translate(20,12)")
+
+            line.append("path")          // add paths to display the line graph
+                .datum(year_wise_crashes)            // pass data generated from gen_scalar_map_data function
+                .transition().duration(200)
+                .attr("class", "fatalities")       // assign it a class for easy updating later on, each line gets a class like line0, line1, line2, line3
+                .attr("fill", "none")
+                .attr("stroke-width", 2)
+                .attr("d", d3.line()
+                    .x(function(d){  return x_line(d.year); })              // set the x position of the point for year
+                    .y(function(d){ return y_line(d.year_fatalities); })    // set the y position of the point for crashes
+                )
+                .attr("stroke", fatalities_color)
+                .attr("transform", "translate(20,12)")
+            
+            line.append("g").attr("class", "brush").call(brush);        // call the brush on the lines
+            let idle_t
+            function idled() { idle_t = null; }
+            function updateChart(event,d) {     // function called when brushing is performed on the line graph
+                extent = event.selection        // get the selected area from brushing
+                var x_line = d3.scaleTime().domain([parseDate('19010101'), parseDate('20221208')]).range([0, width1-50]);
+                if(!extent){        // if selection area is null, set the dates back to default and regenerate the data for that time period
+                    if (!idle_t) return idle_t = setTimeout(idled, 350);
+                        x_line.domain([parseDate('19010101'), parseDate('20221208')])       // set the domain of x as default date
+                        start_date = parseDate('19010101')
+                        end_date = parseDate('20221208')
+                        generate_data(start_date, end_date)
+
+                    }
+                else{      // when brushing is performed
+                    start_date = x_line.invert(extent[0])       // get the start date of brushed area
+                    end_date = x_line.invert(extent[1])       // get the end date of brushed area
+                    x_line.domain([ x_line.invert(extent[0]), x_line.invert(extent[1]) ])      // set the new domain of x axis to the dates between which brushing was done
+                    line.select(".brush").call(brush.move, null)        // remove the selection rect after brushing
+                    generate_data(start_date, end_date)     // generate data only between the time period brushed
+                }
+                // brush for line graph
+                xAxis.transition().duration(1000).call(d3.axisBottom(x_line).ticks(4))        // set the new x axis 
+                line.selectAll('.crashes').transition().duration(1000)        // transition the line graph to the udpated line graph between brushed dates
+                                .attr("d", d3.line()
+                                    .x(function(d){ return x_line(d.year); })        // set the x position of each point in the line
+                                    .y(function(d){ return y_line(d.crashes) })
+                                )
+                line.selectAll('.fatalities').transition().duration(1000)        // transition each line graph to the udpated line graph between brushed dates
+                                .attr("d", d3.line()
+                                    .x(function(d){ return x_line(d.year); })        // set the x position of each point in the line
+                                    .y(function(d){ return y_line(d.year_fatalities) })
+                                )
+                // check the data that was being displayed previously and regenerate graphs for that data based on the dates selected by user during brushing
+                // if(selected_bar == 'month_wise'){ gen_accidents_by_type_bar(month_wise_crashes, svg_bar) }
+                if(selected_bar == 'crash_carrier_wise'){  gen_accidents_by_type_bar(crashes_per_carrier, svg_bar)
+                                                                gen_accidents_by_type_bar(fatalities_per_carrier, svg_bar_deaths, graph = 3)
+                                                                gen_accidents_by_type_bar(fatalities_per_carrier_per_crash, svg_fatalities, graph = 2)
+                                                                call_crash_carrier_wise()}
+
+                else if(selected_bar == 'phase_of_flight_wise'){gen_accidents_by_type_bar(crashes_per_phase_of_flight, svg_bar)
+                                                                gen_accidents_by_type_bar(fatalities_per_phase_of_flight, svg_bar_deaths, graph = 3) 
+                                                                gen_accidents_by_type_bar(fatalities_per_phase_of_flight_per_crash, svg_fatalities, graph = 2)
+                                                                call_phase_of_flight()}
+
+                else if(selected_bar == 'crash_flight_wise'){   gen_accidents_by_type_bar(crashes_per_type_of_flight, svg_bar)
+                                                                gen_accidents_by_type_bar(survival_rate_per_type_of_flight, svg_bar_deaths, graph = 3)
+                                                                gen_accidents_by_type_bar(fatalities_per_type_of_flight, svg_fatalities, graph = 2)
+                                                                call_crash_flight_wise()}
+                // generate_pie(day_wise_crashes, svg_pie_chart)       // generate pie chart for day wise data
+                // generate_pie(month_wise_crashes, svg_pie_chart1)    // generate pie chart for month wise data
+            }
+
+        // ############################################### PIE CHART FOR DAY WISE CRASHES ####################################################
+
+        var xSize = 265; var ySize = 265;       // set height and width for our canvas
+        var margin = 40;
+        var xMax = xSize - margin*2;      // define the max length of x axis
+        var yMax = ySize - margin*2;      // define the max length of y axis
+        // Append SVG Object to the Page with the given dimensions
+        var svg_pie_chart = d3.select("#first").append("g").attr("transform","translate(" + 1065 + "," + 285 + ")");
+        svg_pie_chart.append("rect").attr("x", 0).attr("y", 0).attr("height", xSize+61).attr("width", ySize+30).attr("fill", section_color).attr("rx", 6).attr("ry", 6)
+                        .attr("transform","translate(" + -((xSize/2)+15) + "," + -((xSize/2)+50) + ")");
+        svg_pie_chart.append("text").attr("x", -xSize/2).attr("y", -ySize/2 - 20).text("Crash by days").style("font-size", 22)      // title for the line graphs
+
+        var svg_pie_chart1 = d3.select("#first").append("g").attr("transform","translate(" + 1370 + "," + 285 + ")");
+        svg_pie_chart1.append("rect").attr("x", 0).attr("y", 0).attr("height", xSize+61).attr("width", ySize+30).attr("fill", section_color).attr("rx", 6).attr("ry", 6)
+                        .attr("transform","translate(" + -((xSize/2)+15) + "," + -((xSize/2)+50) + ")");
+        svg_pie_chart1.append("text").attr("x", -xSize/2).attr("y", -ySize/2 - 20).text("Crash by months").style("font-size", 22)      // title for the line graphs
+
+        var radius = Math.min(xSize, ySize) / 2;      // set the radius to the lowest length so pie chart doesn't get clipped
+        var color = ['#26547C','#FFD166','#06D6A0','#B57F50', '#95A472', '#BE92A2', '#fec89a', '#7400b8', '#ff4d6d', '#61a5c2', '#ef3c2d', '#d2b7e5'];   // define color array to separate each data value
+        var pie = d3.pie();     // Instantitate the pie object
+        var arc = d3.arc().innerRadius(50).outerRadius(radius);     // Generate the arcs, and set inner radius as 50 to get donut chart
+        
+        // this function generates the pie chart, it takes the data to be displayed and the svg in which the pie chart is to be generated and generates the pie chart
+        // this function is used for day wise and month wise data
+        function generate_pie(data, svg){
+            // generate the arcs and set the class for each arc for interactivity purposes
+            var arcs = svg.selectAll("arc").data(pie(data)).enter().append("g")
+                        .attr("class", function(){
+                            if(data == day_wise_crashes){ return 'arcs_day_wise'}
+                            else{ return 'arcs_month_wise'}
+                        })
+            //Draw arc paths
+            arcs.append("path").attr("fill", function(d, i) {return color[i]; }).attr("d", arc).transition().duration(200);    // set color of each arc according to the color array defined above
+
+            arcs.append("text")     // add text containing the data value the arc represents
+                .data(pie(data))
+                .attr("transform", function(d, i) {
+                    var _d = arc.centroid(d);       // get the centroid of arcs
+                    _d[0] *= 1.1, d[1] *= 1.1;      // offset the centroid so the text isnt all centered in the center of pie chart
+                    return "translate(" + _d + ")";
+                })
+                .transition().duration(200)
+                .style("text-anchor", "middle")     // align the text to the center of the pie chart
+                .style("font-size", 17)     // font of text set as 17 px
+                .text(function(d, i){ if(data == day_wise_crashes){ return days[i] } else {return months[i]} })     // set the text as the day or the month, depending on the graph
+        }
+
+        var available = false, available1 = false;      // this variable is used to check for click events to avoid highlighting when a section is already selected
+        // mouseover event for first pie chart
+        function display_pie_data(event, d){
+            svg_pie_chart.selectAll('.set_pie_percentage').style("opacity", 0)      // fade away label generated by click event
+            percentage = ((d.value/d3.sum(day_wise_crashes))*100).toFixed(2).toString() + '%'       // get percentage of crashes
+            // display percentage and total crashes for that section
+            svg_pie_chart.append('text').attr("class", "pie_percentage").text(percentage).transition().duration(200).attr("x",-40).attr("y", 5).attr('font-size', 28)
+            svg_pie_chart.append('text').attr("class", "pie_percentage").text('Crashes:'+d.value).transition().duration(200).attr("x",-45).attr("y", 20).attr('font-size', 15)
+            if(available == false){     // if no click event is done, fade the entire pie chart and set the selected section with 100% opacity
+                svg_pie_chart.selectAll('.arcs_day_wise').style("opacity", 0.3)
+                d3.select(this).style("opacity", 1)
+            }
+        }
+        function display_pie_data1(event, d){       // mouseover event for first pie chart1
+            svg_pie_chart1.selectAll('.set_pie_percentage1').style("opacity", 0)      // fade away label generated by click event
+            percentage = ((d.value/d3.sum(month_wise_crashes))*100).toFixed(2).toString() + '%'       // get percentage of crashes
+            // display percentage and total crashes for that section
+            svg_pie_chart1.append('text').attr("class", "pie_percentage").text(percentage).transition().duration(200).attr("x",-37).attr("y", 5).attr('font-size', 28)
+            svg_pie_chart1.append('text').attr("class", "pie_percentage").text('Crashes:'+d.value).transition().duration(200).attr("x",-40).attr("y", 20).attr('font-size', 15)
+            if(available1 == false){     // if no click event is done, fade the entire pie chart and set the selected section with 100% opacity
+                svg_pie_chart1.selectAll('.arcs_month_wise').style("opacity", 0.3)
+                d3.select(this).style("opacity", 1)
+            }
+        }
+        function pie_percentage_remove(){       // mouseout event for pie chart. remove all added text labels and set the opacity back to 100% for both charts
+            svg_pie_chart.selectAll(".arcs_day_wise").style("opacity", 1)
+            svg_pie_chart1.selectAll(".arcs_month_wise").style("opacity", 1)
+            d3.selectAll('.pie_percentage').remove()
+            svg_pie_chart.selectAll('.set_pie_percentage').style("opacity", 1)
+            svg_pie_chart1.selectAll('.set_pie_percentage1').style("opacity", 1)
+        }
+        
+        function set_pie_text(event, d){        // click event for chart 1
+            d3.selectAll('.pie_percentage').remove()        // remove text labels from previous mouseover events
+            d3.selectAll('.set_pie_percentage').remove()    // remove text labels from previous click events
+            percentage = ((d.value/d3.sum(day_wise_crashes))*100).toFixed(2).toString() + '%'       // get percentage of crashes
+            // display percentage and total crashes for that section
+            svg_pie_chart.append('text').attr("class", "set_pie_percentage").text(percentage).attr("x",-40).attr("y", 5).attr('font-size', 28)
+            svg_pie_chart.append('text').attr("class", "set_pie_percentage").text('Crashes:'+d.value).attr("x",-45).attr("y", 20).attr('font-size', 15)
+            svg_pie_chart.selectAll('.arcs_day_wise').style("opacity", 0.3).attr("class", "idk")        // fade the entire pie chart
+            d3.select(this).style("opacity", 1)     // highlight the selected section
+            available = true;       // set variable to true to avoid mouseover events when click is used
+        }
+        function remove_pie_text(){         // remove text labels generated by click events on pie chart on doubleclick
+            svg_pie_chart.selectAll('.idk').attr("class", "arcs_day_wise")      // set the class of arcs back to original class
+            svg_pie_chart.selectAll("arcs_day_wise").style("opacity", 1)        // set the opacity of entire pie chart to 100%
+            svg_pie_chart.selectAll('.set_pie_percentage').remove()             // remove all text labels
+            available = false}      // reset variable to false to indicate no click event performed
+        function remove_pie_text1(){         // remove text labels generated by click events on pie chart 1 on doubleclick
+            svg_pie_chart1.selectAll('.idk1').attr("class", "arcs_month_wise")      // set the class of arcs back to original class
+            svg_pie_chart1.selectAll("arcs_month_wise").style("opacity", 1)        // set the opacity of entire pie chart to 100%
+            svg_pie_chart1.selectAll('.set_pie_percentage1').remove()              // remove all text labels
+            available1 = false}      // reset variable to false to indicate no click event performed
+
+        function set_pie_text1(event, d){        // click event for chart 1
+            d3.selectAll('.pie_percentage').remove()        // remove text labels from previous mouseover events
+            d3.selectAll('.set_pie_percentage1').remove()    // remove text labels from previous click events
+            percentage = ((d.value/d3.sum(month_wise_crashes))*100).toFixed(2).toString() + '%'       // get percentage of crashes
+            // display percentage and total crashes for that section
+            svg_pie_chart1.append('text').attr("class", "set_pie_percentage1").text(percentage).attr("x",-40).attr("y", 5).attr('font-size', 28)
+            svg_pie_chart1.append('text').attr("class", "set_pie_percentage1").text('Crashes:'+d.value).attr("x",-45).attr("y", 20).attr('font-size', 15)
+            svg_pie_chart1.selectAll('.arcs_month_wise').style("opacity", 0.3).attr("class", "idk1")        // fade the entire pie chart
+            d3.select(this).style("opacity", 1)     // highlight the selected section
+            available1 = true;       // set variable to true to avoid mouseover events when click is used
+        }
+        
+        generate_pie(day_wise_crashes, svg_pie_chart)       // generate pie chart for day wise data
+        generate_pie(month_wise_crashes, svg_pie_chart1)    // generate pie chart for month wise data
+        // add mouse events to the pie charts
+        svg_pie_chart.selectAll('.arcs_day_wise').on("mouseover", display_pie_data).on("mouseout", pie_percentage_remove).on("click", set_pie_text).on("dblclick", remove_pie_text)
+        svg_pie_chart1.selectAll('.arcs_month_wise').on("mouseover", display_pie_data1).on("mouseout", pie_percentage_remove).on("click", set_pie_text1).on("dblclick", remove_pie_text1)
+        
+        // ############################################### BAR CHART MONTH WISE CRASHES ###############################################
+        var svg_bar = d3.select("#first").append("g").attr("transform", "translate(" + 5 + "," + bottom_graphs + ")");   // add svg for bar graph that shows crashes
+        svg_bar.append("rect").attr("x", 0).attr("y", 0).attr("height", "300").attr("width", "500").attr("fill", section_color).attr("rx", 6).attr("ry", 6)     // set boundary box for graph
+        svg_bar.append("text").attr("x", 30).attr("y", 27).text("Crash Rate").style("font-size", 22)      // title for the line graphs
+        svg_button = d3.select("#first").append("g").attr("transform", "translate(" + 900 + "," + 60 + ")");   // svg that houses all the buttons for the dashbaord
+        // define vars to auto display the buttons
+        var padding = 20, initital = 0, text_pos = 25, initialx = 20, text_posx = 10, paddingx = 150, button_height = 35, button_width = 140;
+
+        // add button
+        svg_button.append("rect").attr("class", "phase_of_flight_wise")     // add rect and give it a class for selection
+                    .attr("height", button_height).attr("width", button_width).attr("rx", 6).attr("ry", 6).attr("fill", section_color)  // set the params of button
+                    .attr("transform", "translate(" + initialx + ',' + initital + ")")      // transform the button to the desired location
+        initital += text_pos, initialx += text_posx     // increment to position buttons equally
+        svg_button.append("text").attr("class", "phase_of_flight_wise_text").text("Phase of Flight").attr("font-size", 20)  // set the text of the button
+                    .attr("transform", "translate(" + initialx + ',' + initital + ")")      // transform the button to the desired location
+                    
+        initialx += paddingx, initital = 0     // increment to position buttons equally
+        // define mouse events for the button and its text
+        svg_button.selectAll(".phase_of_flight_wise").on("click", call_phase_of_flight)
+        svg_button.selectAll(".phase_of_flight_wise_text").on("click", call_phase_of_flight)
+
+        function call_phase_of_flight(){        // click event for the above button
+            d3.selectAll("circle").remove()
+            selected_bar = 'phase_of_flight_wise'       // set the bar selected so that after brushing the same data is displayed filtered by date
+            // generate the bar charts for the data that was selected using button
+            gen_accidents_by_type_bar(crashes_per_phase_of_flight, svg_bar)
+            gen_accidents_by_type_bar(fatalities_per_phase_of_flight, svg_bar_deaths, graph = 3)
+            gen_accidents_by_type_bar(fatalities_per_phase_of_flight_per_crash, svg_fatalities, graph = 2)
+            // these variables are used for highlighting purpose of the bar graph since a single function generates all the bar graphs
+            data31 = fatalities_per_phase_of_flight_per_crash
+            data32 = crashes_per_phase_of_flight
+            data22 = fatalities_per_phase_of_flight
+            // define mouse events for all the bar graphs
+            svg_bar.append("circle").attr("cx", 480).attr("cy", 10).attr("r", 5).attr("fill", "red")
+            svg_bar_deaths.append("circle").attr("cx", 480).attr("cy", 10).attr("r", 5).attr("fill", "red")
+            svg_fatalities.append("circle").attr("cx", 880).attr("cy", 10).attr("r", 5).attr("fill", "red")
+            svg_bar_deaths.selectAll('.rect3').on("mouseover", highlight3).on("mouseout", de_highlight).on("click", click_bar_phase_of_flight)
+            svg_bar.selectAll('.rect1').on("mouseover", highlight1).on("mouseout", de_highlight).on("click", click_bar_phase_of_flight)
+            svg_fatalities.selectAll('.rect2').on("mouseover", highlight2).on("mouseout", de_highlight).on("click", click_bar_phase_of_flight)
+        }
+        
+        svg_button.append("rect").attr("class", "crash_carrier_wise")     // add rect and give it a class for selection
+                    .attr("height", button_height).attr("width", button_width).attr("rx", 6).attr("ry", 6).attr("fill", section_color)  // set the params of button
+                    .attr("transform", "translate(" + initialx + ',' + initital + ")")      // transform the button to the desired location
+        initital += text_pos, initialx += text_posx     // increment to position buttons equally
+        svg_button.append("text").attr("class", "crash_carrier_wise_text").text("Carrier wise").attr("font-size", 20)  // set the text of the button
+                    .attr("transform", "translate(" + initialx + ',' + initital + ")")      // transform the button to the desired location
+                    
+        initialx += paddingx, initital = 0     // increment to position buttons equally
+        // define mouse events for the button and its text
+        svg_button.selectAll(".crash_carrier_wise").on("click", call_crash_carrier_wise)
+        svg_button.selectAll(".crash_carrier_wise_text").on("click", call_crash_carrier_wise)
+
+        function call_crash_carrier_wise(){        // click event for the above button
+            d3.selectAll("circle").remove()
+            selected_bar = 'crash_carrier_wise'       // set the bar selected so that after brushing the same data is displayed filtered by date
+            // generate the bar charts for the data that was selected using button
+            gen_accidents_by_type_bar(crashes_per_carrier, svg_bar)
+            gen_accidents_by_type_bar(fatalities_per_carrier, svg_bar_deaths, graph = 3)
+            gen_accidents_by_type_bar(fatalities_per_carrier_per_crash, svg_fatalities, graph = 2)
+            // these variables are used for highlighting purpose of the bar graph since a single function generates all the bar graphs
+            data31 = fatalities_per_carrier_per_crash
+            data32 = crashes_per_carrier
+            data22 = fatalities_per_carrier
+            // define mouse events for all the bar graphs
+            svg_bar.append("circle").attr("cx", 480).attr("cy", 10).attr("r", 5).attr("fill", "red")
+            svg_bar_deaths.append("circle").attr("cx", 480).attr("cy", 10).attr("r", 5).attr("fill", "red")
+            svg_fatalities.append("circle").attr("cx", 880).attr("cy", 10).attr("r", 5).attr("fill", "red")
+            svg_bar_deaths.selectAll('.rect3').on("mouseover", highlight3).on("mouseout", de_highlight).on("click", click_bar_carrier)
+            svg_bar.selectAll('.rect1').on("mouseover", highlight1).on("mouseout", de_highlight).on("click", click_bar_carrier)
+            svg_fatalities.selectAll('.rect2').on("mouseover", highlight2).on("mouseout", de_highlight).on("click", click_bar_carrier)
+
+        }
+        svg_button.append("rect").attr("class", "crash_flight_wise")     // add rect and give it a class for selection
+                    .attr("height", button_height).attr("width", button_width).attr("rx", 6).attr("ry", 6).attr("fill", section_color)  // set the params of button
+                    .attr("transform", "translate(" + initialx + ',' + initital + ")")      // transform the button to the desired location
+        initital += text_pos, initialx += text_posx     // increment to position buttons equally
+        svg_button.append("text").attr("class", "crash_flight_wise_text").text("Flight wise").attr("font-size", 20)  // set the text of the button
+                    .attr("transform", "translate(" + initialx + ',' + initital + ")")      // transform the button to the desired location
+
+        initialx += paddingx, initital = 0     // increment to position buttons equally
+        // define mouse events for the button and its text
+        svg_button.selectAll(".crash_flight_wise").on("click", call_crash_flight_wise)
+        svg_button.selectAll(".crash_flight_wise_text").on("click", call_crash_flight_wise)
+
+        svg_button.append("rect").attr("class", "reset_temp_line_graph")     // add rect and give it a class for selection
+                    .attr("height", button_height).attr("width", button_width).attr("rx", 6).attr("ry", 6).attr("fill", section_color)  // set the params of button
+                    .attr("transform", "translate(" + initialx + ',' + initital + ")")      // transform the button to the desired location
+        initital += text_pos, initialx += text_posx     // increment to position buttons equally
+        svg_button.append("text").attr("class", "reset_temp_line_graph_text").text("Reset").attr("font-size", 20)  // set the text of the button
+                    .attr("transform", "translate(" + initialx + ',' + initital + ")")      // transform the button to the desired location
+                    
+        initialx += paddingx, initital = 0     // increment to position buttons equally
+        // set mouse click events for the reset button and text. when clicked reset the entire dashboard. remove all texts from pie chart and set the crash history to display 
+        // unfiltered data
+        svg_button.selectAll(".reset_temp_line_graph").on("click", function(){  d3.selectAll('.temp_remove').remove()
+                                                                                d3.selectAll('circle').remove()
+                                                                                remove_pie_text()
+                                                                                remove_pie_text1()
+                                                                                pie_percentage_remove()})
+        svg_button.selectAll(".reset_temp_line_graph_text").on("click", function(){ d3.selectAll('.temp_remove').remove()
+                                                                                    remove_pie_text()
+                                                                                    remove_pie_text1()
+                                                                                    pie_percentage_remove()})
+
+        function call_crash_flight_wise(){        // click event for the above button
+            d3.selectAll("circle").remove()
+            selected_bar = 'crash_flight_wise'       // set the bar selected so that after brushing the same data is displayed filtered by date
+            // generate the bar charts for the data that was selected using button
+            gen_accidents_by_type_bar(crashes_per_type_of_flight, svg_bar)
+            gen_accidents_by_type_bar(survival_rate_per_type_of_flight, svg_bar_deaths, graph = 3)
+            gen_accidents_by_type_bar(fatalities_per_type_of_flight, svg_fatalities, graph = 2)
+            // these variables are used for highlighting purpose of the bar graph since a single function generates all the bar graphs
+            data31 = fatalities_per_type_of_flight
+            data32 = crashes_per_type_of_flight
+            data22 = survival_rate_per_type_of_flight
+            // define mouse events for all the bar graphs
+            svg_bar.append("circle").attr("cx", 480).attr("cy", 10).attr("r", 5).attr("fill", "red")
+            svg_bar_deaths.append("circle").attr("cx", 480).attr("cy", 10).attr("r", 5).attr("fill", "red")
+            svg_fatalities.append("circle").attr("cx", 880).attr("cy", 10).attr("r", 5).attr("fill", "red")
+            svg_bar_deaths.selectAll('.rect3').on("mouseover", highlight3).on("mouseout", de_highlight).on("click", click_bar_flight)
+            svg_bar.selectAll('.rect1').on("mouseover", highlight1).on("mouseout", de_highlight).on("click", click_bar_flight)
+            svg_fatalities.selectAll('.rect2').on("mouseover", highlight2).on("mouseout", de_highlight).on("click", click_bar_flight)
+        }
+
+        // ###################################################### DEATH RATE PER TYPE ######################################################
+        // create group that displays death rate bar graph
+        var svg_bar_deaths = d3.select("#first").append("g").attr("transform", "translate(" + 520 + "," + bottom_graphs + ")");   // add legend to the line graphs
+        svg_bar_deaths.append("rect").attr("x", 0).attr("y", 0).attr("height", "300").attr("width", "500").attr("fill", section_color).attr("rx", 6).attr("ry", 6)     // set boundary box for graph
+        svg_bar_deaths.append("text").attr("x", 30).attr("y", 27).text("Death Rate").style("font-size", 22)      // title for the line graphs
+
+        // ###################################################### BAR CHART - FUNCTION DISPLAYS ALL 12 BAR CHARTS ######################################################
+        var width_bar = 500, height_bar = 200, fill = '';    // initialize the params of the bar graph
+        // function takes in the data to plot, the svg in which to position the bar graph, and the graph value to assign classes for easy manipulation later on
+        function gen_accidents_by_type_bar(data, svg, graph = 1){
+            var width_bar = 500, height_bar = 200;   // define new height with margins
+            if(graph == 1){     // graph = 1 represents the crash rate for that data
+                d3.selectAll(".axis_bar1").remove()     // remove all instances of previous plots for graph 1
+                svg.selectAll(".rect1").remove()
+                fill = crashes_color        // set the color of the bar graph as defined at the start of the script
+            }
+            else if(graph == 2){     // graph = 2 represents the fatality per crash for that data
+                d3.selectAll(".axis_bar2").remove()     // remove all instances of previous plots for graph 2
+                svg.selectAll(".rect2").remove()
+                width_bar = 900, height_bar = 270       // this is the main graph and hence its width and height are made larger
+                fill = '#c1121f'        // set the color of the bar graph as defined at the start of the script
+            }
+            else if(graph == 3){     // graph = 2 represents the death rate for that data
+                d3.selectAll(".axis_bar3").remove()     // remove all instances of previous plots for graph 3
+                svg.selectAll(".rect3").remove()
+                fill = fatalities_color        // set the color of the bar graph as defined at the start of the script
+            }
+            // generate x scale, we use scaleband since our data is categorical and add it to x axis
+            var x = d3.scaleBand().domain( data.map(function(d) { return d.name; }) ).range([0, width_bar-50]).padding(0.4);        // create the scale for x axis that displays each date
+            var x_bar = svg.append("g").call(d3.axisBottom(x)).attr("class", function(){ return 'axis_bar'+graph}).attr("transform", "translate(35,"+(height_bar+40)+")")       // add the x axis to the graph
+            x_bar.selectAll("text").style("text-anchor", "end").attr("dx", "-.8em").attr("dy", ".15em").attr("transform", "rotate(-35)" );  // rotate x axis text for better readability
+            
+            // get max value of data passed into the function and create y axis scale and add y axis to the svg
+            var max_crashes_bar = d3.max(data);
+            var y = d3.scaleLinear().domain([0, d3.max(data, function(d) { return d.value; })]).range([height_bar, 0])
+            svg.append("g").call(d3.axisLeft(y).ticks(6)).attr("transform", "translate("+ 35 + "," + 42+")").attr("class", function(){ return 'axis_bar'+graph}) ;   // set the color of text on y axis to the color of the line graph it is for
+
+            svg.selectAll(".bar")     // select all the bars
+                .data(data)     // pass our data from array
+                .enter().append("rect")     // dynamically add number of required rectangles
+                .attr("class", function(){ return 'rect'+graph})        // set class of each bar according to the svg they are in for easy manipulation for mouse events
+                .attr("fill", fill)
+                .attr("x", function(d) { return x(d.name); })   // set the x position of bar corresponding to the year from array
+                .attr("y", function(d, i) { return y(d.value); })  // set the y position of bar corresponding to the value from array
+                .attr("width", x.bandwidth())       // defines the width of each bar based on the domain and range of x scale
+                .attr("height", function(d, i) { return height_bar - y(d.value); })   // scale height according to data value
+                .attr("transform", "translate(35,40)")
+        }
+
+        // ############################################### BAR GRAPH - FATALITY RATE PER CRASH ###############################################
+        var svg_fatalities = d3.select("#first").append("g").attr("transform", "translate(" + 5 + "," + start + ")");   // create svg that shows fatality rate per crash
+        svg_fatalities.append("rect").attr("x", 0).attr("y", 0).attr("height", "370").attr("width", "900").attr("fill", section_color).attr("rx", 6).attr("ry", 6)     // set boundary box for graph
+        svg_fatalities.append("text").attr("x", 10).attr("y", 25).text("Fatality Rate per Accident").style("font-size", 22)      // title for the line graphs
+        // var y = d3.scaleLinear().domain([0, d3.max(fatalities_per_type_of_flight, function(d) { return d.value; })]).range([200, 0])
+        call_phase_of_flight()      // initialize dashboard with crash data from phase of flight
+        d3.selectAll('circle').remove()
+        // ############################################# FUNCTION TO HIGHLIGHT DATA POINTS #############################################
+        var new_year_crashes = new Array();     // array that will display temp line chart based on the bar we click from any 3 bar graphs
+        function click_bar_phase_of_flight(event, d){       // function to display data related to phase of flight
+            d3.selectAll('.temp_remove').remove()       // remove all previous temp line charts
+            entity = d.name         // set the name of the phase of flight to filter for i.e landing takeoff cruise etc
+            var newa = Array.from(d3.group(data, d => d.phase_of_flight), ([key, value]) => ({key, value}))     // group data by phase of flight
+            var newa = newa.filter(function(d){ return d.key == entity });      // filter for phase of flight that user clicked on in the bar chart
+            generate_year_wise_from_bar(newa)       // generate the data for the line graph
+            gen_temp_line_graph()       // generate the line graph from the above generated data
+            svg_bar.selectAll("circle").attr("r", 0)
+            svg_bar_deaths.selectAll("circle").attr("r", 0)
+            svg_fatalities.selectAll("circle").attr("r", 0)
+        }
+
+        function click_bar_carrier(event, d){       // function to display data related to air carrier
+            d3.selectAll('.temp_remove').remove()       // remove all previous temp line charts
+            entity = d.name         // set the name of the air carrier to filter for
+            var newa = Array.from(d3.group(data, d => d.Air_carrier), ([key, value]) => ({key, value}))     // group data by air carrier
+            var newa = newa.filter(function(d){ return d.key == entity });      // filter for phase of flight that user clicked on in the bar chart
+            generate_year_wise_from_bar(newa)       // generate the data for the line graph
+            gen_temp_line_graph()       // generate the line graph from the above generated data
+        }
+
+        function click_bar_flight(event, d){       // function to display data related to reason for flight
+            d3.selectAll('.temp_remove').remove()       // remove all previous temp line charts
+            entity = d.name         // set the name of the reason of flight to filter for
+            var newa = Array.from(d3.group(data, d => d.Purpose_of_flight), ([key, value]) => ({key, value}))     // group data by reason for flight
+            var newa = newa.filter(function(d){ return d.key == entity });      // filter for phase of flight that user clicked on in the bar chart
+            generate_year_wise_from_bar(newa)       // generate the data for the line graph
+            gen_temp_line_graph()       // generate the line graph from the above generated data
+        }
+        // ################################################## UPDATED YEAR WISE GRAPH INTERACTIVITY ########################################
+
+        function generate_year_wise_from_bar(data){     // this function generates data for the line graph to plot and takes in an array to be plotted
+            new_year_crashes.length = 0     // empty the contents of the array from previous data generation
+            var current_year = parseDate(data[0].value[0].Event_date).getFullYear()     // get the starting year present in the array
+            var year_crashes = 0, year_fatalities = 0;      // set count of crashes and fatalities to -
+                for (let i = 0; i < data[0].value.length; i++){         // for each value in array
+                    if(parseDate(data[0].value[i].Event_date).getFullYear() == current_year){       // check if the year at that iteration is equal to the current year
+                        // if yes increment the count of crashes and fatalities, if null data set it to 0
+                        year_crashes += 1
+                        year_fatalities += parseInt(data[0].value[i].Total_Fatal_Injuries) || 0
+                    }
+                    else{       // when current year is not equal to the year in the array, push above count into the array and set current year to the new year from the data
+                        new_year_crashes.push({year:data[0].value[i-1].Event_date, 
+                                                crashes:year_crashes,
+                                                year_fatalities:year_fatalities })
+                        year_crashes = 0, year_fatalities = 0, current_year = parseDate(data[0].value[i].Event_date).getFullYear()
+                    }
+                }
+
+        }
+
+        function gen_temp_line_graph(){     // function that generates the line graph for a specific thing based on the data
+            d3.selectAll('circle').remove()
+            var height1 = 200       // set height and width of the graph
+            var width1 = 500
+            var temp_svg = d3.select("#first").append("g").attr("class", "temp_remove").attr("transform", "translate(" + 1030 + "," + bottom_graphs + ")");   // define group to display the chart
+            temp_svg.append("rect").attr("x", 0).attr("y", 0).attr("height", "300").attr("width", "500").attr("fill", section_color).attr("rx", 6).attr("ry", 6)        // add boundary rectangle 
+            temp_svg.append("text").attr("x", 30).attr("y", 27).text("Crash History").style("font-size", 22)      // title for the line graphs
+            temp_svg.append("circle").attr("cx", 480).attr("cy", 10).attr("r", 5).attr("fill", "red")
+            // create x axis scale and add x axis to the graph, the domain is set as the start and end date of the array passed
+            var x_line = d3.scaleTime().domain([parseDate(new_year_crashes[0].year), parseDate(new_year_crashes[new_year_crashes.length - 1].year)]).range([0, width1-50]);
+            var xAxis = temp_svg.append("g").call(d3.axisBottom(x_line).ticks(4)).attr("class", "tempaxis").attr("transform", "translate(35,"+(height1+43)+")")       // add the x axis to the graph
+            // get the max value of fatalities and crashes and set it as the highest point for y axis. generate the scale and add it to the graph
+            var max_crashes = d3.max(new_year_crashes, d => d.crashes);
+            var max_fatalities = d3.max(new_year_crashes, d => d.year_fatalities);
+            var max = Math.max(max_crashes, max_fatalities)
+            var y_line = d3.scaleLinear().domain([max, 0]).range([0, height1])
+            temp_svg.append("g").call(d3.axisLeft(y_line).ticks(6)).attr("class", "tempaxis").attr("transform", "translate("+ 35 + "," + 42+")");
+
+            temp_svg.append("path")          // add paths to display the line graph
+                .datum(new_year_crashes)            // pass data generated from generate_year_wise_from_bar function
+                .attr("class", "temp_crashes")       // assign it a class for easy updating later on
+                .attr("fill", "none")
+                .attr("stroke-width", 2)
+                .attr("d", d3.line()
+                    .x(function(d){ return x_line(parseDate(d.year)); })        // set the x position of each point in the line
+                    .y(function(d){ return y_line(d.crashes); })        // set the y position of each point in the line
+                )
+                .attr("stroke", crashes_color)      // set the color of it as defined at the top of the script
+                .attr("transform", "translate(35,43)")
+            temp_svg.append("path")          // add paths to display the line graph
+                .datum(new_year_crashes)            // pass data generated from generate_year_wise_from_bar function
+                .attr("class", "temp_crashes")       // assign it a class for easy updating later on
+                .attr("fill", "none")
+                .attr("stroke-width", 2)
+                .attr("d", d3.line()
+                    .x(function(d){ return x_line(parseDate(d.year)); })        // set the x position of each point in the line
+                    .y(function(d){return y_line(d.year_fatalities); })        // set the y position of each point in the line
+                )
+                .attr("stroke", fatalities_color)      // set the color of it as defined at the top of the script
+                .attr("transform", "translate(35,43)")
+
+            // add circles to each point for easy reading and interactivity
+            temp_svg.selectAll("dot")
+                .data(new_year_crashes)        // pass data generated from generate_year_wise_from_bar function
+                .enter()        // check if required number of circles are present or not and add accordingly
+                .append("circle")       // add the circle
+                .attr("class", "temp_crash_circle")     // assign it a class for mouse events
+                .attr("cx", function(d) { return x_line(parseDate(d.year)); } )
+                .attr("cy", function(d) { return y_line(d.year_fatalities); } )
+                .attr("r", 3)       // set circle with radius 3px
+                .style("fill", "red")   // make the circles red in color
+                .attr("transform", "translate(35,43)")
+                .on("mouseover", function(event, d){        // mouseover event for circle representing crashes
+                    year1 = d.year      // get the year that the circle is present on. this is used to filter for the 2nd circle for fatalities
+                    // fade all other circles and set the opacity of selected circle to 100% to add highlight effect
+                    temp_svg.selectAll("circle").style("opacity", 0.3)
+                    temp_svg.selectAll(".temp_crashes").style("opacity", 0.3)
+                    d3.select(this).style("opacity", 1).attr("r", 6)        // increase the size of circle to highlight it
+                    temp_svg.selectAll(".temp_fatalities_circle").data(new_year_crashes).filter(function(d){      // find the circle from fatalities for the same year
+                        if(d.year == year1){
+                            new_year_val = d.crashes
+                            return new_year1 = d.year;
+                        }
+                    })
+                    .style("opacity", 1).attr("r", 6)       // set its opacity also to 1 and increase radius to highlight it
+                    // display the numeric value of the crashes and fatalities above the circles on the graph
+                    temp_svg.append("text").text(d.year_fatalities).attr("class", "temp_line_data").attr("x", x_line(parseDate(d.year))+30).attr("y", y_line(d.year_fatalities)+30)
+                    temp_svg.append("text").text(new_year_val).attr("class", "temp_line_data").attr("x", x_line(parseDate(d.year))+30).attr("y", y_line(d.crashes)+30)
+                })
+                .on("mouseout", function(){         // mouseout events for circles
+                    // bring up the opacity of all elements back to 100% and remove the previously added text
+                    temp_svg.selectAll("circle").style("opacity", 1).attr("r", 3)
+                    temp_svg.selectAll(".temp_crashes").style("opacity", 1)
+                    d3.selectAll(".temp_line_data").remove() })
+            temp_svg.selectAll("dot")
+                .data(new_year_crashes)        // pass data generated from generate_year_wise_from_bar function
+                .enter()        // check if required number of circles are present or not and add accordingly
+                .append("circle")       // add the circle
+                .attr("class", "temp_fatalities_circle")     // assign it a class for mouse events
+                .attr("cx", function(d) { return x_line(parseDate(d.year)); } )
+                .attr("cy", function(d) { return y_line(d.crashes); } )
+                .attr("r", 3)       // set circle with radius 3px
+                .style("fill", "#8a3602")
+                .attr("transform", "translate(35,43)")
+                .on("mouseover", function(event, d){         // mouseover event for circle representing fatalities
+                    year = d.year      // get the year that the circle is present on. this is used to filter for the 2nd circle for crashes
+                    // fade all other circles and set the opacity of selected circle to 100% to add highlight effect
+                    temp_svg.selectAll("circle").style("opacity", 0.3)
+                    temp_svg.selectAll(".temp_crashes").style("opacity", 0.3)
+                    d3.select(this).style("opacity", 1).attr("r", 6)        // increase the size of circle to highlight it
+                    temp_svg.selectAll("circle").data(new_year_crashes).filter(function(d){      // find the circle from fatalities for the same year
+                        if(d.year == year){
+                            new_year_val = d.year_fatalities
+                            return new_year = d.year;
+                    }})
+                    .style("opacity", 1).attr("r", 6)       // set its opacity also to 1 and increase radius to highlight it
+                    // display the numeric value of the crashes and fatalities above the circles on the graph
+                    temp_svg.append("text").text(d.crashes).attr("class", "temp_line_data").attr("x", x_line(parseDate(d.year))+30).attr("y", y_line(d.crashes)+30)
+                    temp_svg.append("text").text(new_year_val).attr("class", "temp_line_data").attr("x", x_line(parseDate(d.year))+30).attr("y", y_line(d.year_fatalities)+30)
+                })
+                .on("mouseout", function(){          // mouseout events for circles
+                    // bring up the opacity of all elements back to 100% and remove the previously added text
+                    temp_svg.selectAll("circle").style("opacity", 1).attr("r", 3)
+                    temp_svg.selectAll(".temp_crashes").style("opacity", 1)
+                    d3.selectAll(".temp_line_data").remove() })
+        }
+
+        // these functions are responsible for highlighting the same bar user has hovered over from all the 3 graphs
+        function highlight3(event, d){
+            var name = d.name       // get the name of the the bar to be selected
+            // fade all the bar graphs
+            svg_bar_deaths.selectAll(".rect3").style("opacity", 0.3)
+            svg_fatalities.selectAll(".rect2").style("opacity", 0.3)
+            svg_bar.selectAll(".rect1").style("opacity", 0.3)
+            d3.select(this).style("opacity", 1)     // select the bar hovered and highlight it
+
+            // set the scales for each graph to display value of the bar on mouseover
+            var x1 = d3.scaleBand().domain( data31.map(function(d) { return d.name; }) ).range([0, 900-50]).padding(0.4);        // create the scale for x axis that displays each date
+            var x2 = d3.scaleBand().domain( data32.map(function(d) { return d.name; }) ).range([0, 500-50]).padding(0.4);        // create the scale for x axis that displays each date
+            var x3 = d3.scaleBand().domain( data22.map(function(d) { return d.name; }) ).range([0, 500-50]).padding(0.4);        // create the scale for x axis that displays each date
+            var y1 = d3.scaleLinear().domain([0, d3.max(data31, function(d) { return d.value; })]).range([270, 0])
+            var y2 = d3.scaleLinear().domain([0, d3.max(data32, function(d) { return d.value; })]).range([200, 0])
+            var y3 = d3.scaleLinear().domain([0, d3.max(data22, function(d) { return d.value; })]).range([200, 0])
+
+            var fatalities_data = 0, fatalities_name = '';      // initialize empty data to store the name of the bat and its value
+            svg_fatalities.selectAll(".rect2").data(data31).filter(function(d){      // find the bar from fatalities which displays the hovered value in other graph
+                if(d.name == name){
+                    fatalities_data = parseFloat(d.value )
+                    fatalities_name = d.name}
+                return d.name == name;
+            })
+            .style("opacity", 1)        // set that bars opacity to 1 to highlight it
+            // add a text element above the bar which displays the value of the bar
+            svg_fatalities.append('text').attr("class", "highlight_text").text(fatalities_data.toFixed(2)).attr("x", x1(fatalities_name)+40).attr("y", y1(fatalities_data)+30)
+            
+            var fatalities_data1 = 0, fatalities_name1 = '';      // initialize empty data to store the name of the bat and its value
+            svg_bar.selectAll(".rect1").data(data32).filter(function(d){      // find the bar from fatalities which displays the hovered value in other graph
+                if(d.name == name){
+                    fatalities_data1 = parseInt(d.value)
+                    fatalities_name1 = d.name }
+                return d.name == name;
+            })
+            .style("opacity", 1)        // set that bars opacity to 1 to highlight it
+            // add a text element above the bar which displays the value of the bar
+            svg_bar.append('text').attr("class", "highlight_text").text(fatalities_data1).attr("x", x2(fatalities_name1)+40).attr("y", y2(fatalities_data1)+30)
+
+            percentage = ((d.value)*100).toFixed(2).toString() + ' %'
+            svg_bar_deaths.append('text').attr("class", "highlight_text").text(percentage).attr("x", x3(d.name)+25).attr("y", y3(d.value)+30)
+        }
+
+        function highlight1(event, d){
+            var name = d.name       // get the name of the the bar to be selected
+            // fade all the bar graphs
+            svg_bar_deaths.selectAll(".rect3").style("opacity", 0.3)
+            svg_fatalities.selectAll(".rect2").style("opacity", 0.3)
+            svg_bar.selectAll(".rect1").style("opacity", 0.3)
+            d3.select(this).style("opacity", 1)
+            
+            // set the scales for each graph to display value of the bar on mouseover
+            var x1 = d3.scaleBand().domain( data31.map(function(d) { return d.name; }) ).range([0, 900-50]).padding(0.4);        // create the scale for x axis that displays each date
+            var x2 = d3.scaleBand().domain( data22.map(function(d) { return d.name; }) ).range([0, 500-50]).padding(0.4);        // create the scale for x axis that displays each date
+            var x3 = d3.scaleBand().domain( data32.map(function(d) { return d.name; }) ).range([0, 500-50]).padding(0.4);        // create the scale for x axis that displays each date
+            var y1 = d3.scaleLinear().domain([0, d3.max(data31, function(d) { return d.value; })]).range([270, 0])
+            var y2 = d3.scaleLinear().domain([0, d3.max(data22, function(d) { return d.value; })]).range([200, 0])
+            var y3 = d3.scaleLinear().domain([0, d3.max(data32, function(d) { return d.value; })]).range([200, 0])
+            
+            var fatalities_data = 0, fatalities_name = '';      // initialize empty data to store the name of the bat and its value
+            svg_fatalities.selectAll(".rect2").data(data31).filter(function(d){      // find the bar from fatalities which displays the hovered value in other graph
+                if(d.name == name){
+                    fatalities_data = parseFloat(d.value )
+                    fatalities_name = d.name}
+                return d.name == name;
+            })
+            .style("opacity", 1)        // set that bars opacity to 1 to highlight it
+            // add a text element above the bar which displays the value of the bar
+            svg_fatalities.append('text').attr("class", "highlight_text").text(fatalities_data.toFixed(2)).attr("x", x1(fatalities_name)+40).attr("y", y1(fatalities_data)+30)
+
+            var fatalities_data1 = 0, fatalities_name1 = '';      // initialize empty data to store the name of the bat and its value
+            svg_bar_deaths.selectAll(".rect3").data(data22).filter(function(d){      // find the bar from fatalities which displays the hovered value in other graph
+                if(d.name == name){
+                    fatalities_data1 =  parseFloat(d.value)
+                    fatalities_data2 = parseFloat(fatalities_data1*100).toFixed(2).toString() + '%'
+                    fatalities_name1 = d.name}
+                return d.name == name;
+            })
+            .style("opacity", 1)        // set that bars opacity to 1 to highlight it
+            // add a text element above the bar which displays the value of the bar
+            svg_bar_deaths.append('text').attr("class", "highlight_text").text(fatalities_data2).attr("x", x2(fatalities_name1)+30).attr("y", y2(fatalities_data1)+30)
+            svg_bar.append('text').attr("class", "highlight_text").text(d.value).attr("x", x3(d.name)+35).attr("y", y3(d.value)+30)
+        }
+
+        function highlight2(event, d){
+            var name = d.name       // get the name of the the bar to be selected
+            // fade all the bar graphs
+            svg_bar_deaths.selectAll(".rect3").style("opacity", 0.3)
+            svg_fatalities.selectAll(".rect2").style("opacity", 0.3)
+            svg_bar.selectAll(".rect1").style("opacity", 0.3)
+            d3.select(this).style("opacity", 1)
+            
+            // set the scales for each graph to display value of the bar on mouseover
+            var x1 = d3.scaleBand().domain( data32.map(function(d) { return d.name; }) ).range([0, 500-50]).padding(0.4);        // create the scale for x axis that displays each date
+            var x2 = d3.scaleBand().domain( data22.map(function(d) { return d.name; }) ).range([0, 500-50]).padding(0.4);        // create the scale for x axis that displays each date
+            var x3 = d3.scaleBand().domain( data31.map(function(d) { return d.name; }) ).range([0, 900-50]).padding(0.4);        // create the scale for x axis that displays each date
+            var y1 = d3.scaleLinear().domain([0, d3.max(data32, function(d) { return d.value; })]).range([200, 0])
+            var y2 = d3.scaleLinear().domain([0, d3.max(data22, function(d) { return d.value; })]).range([200, 0])
+            var y3 = d3.scaleLinear().domain([0, d3.max(data31, function(d) { return d.value; })]).range([270, 0])
+            
+            var fatalities_data = 0, fatalities_name = '';      // initialize empty data to store the name of the bat and its value
+            svg_bar.selectAll(".rect1").data(data32).filter(function(d){      // find the bar from fatalities which displays the hovered value in other graph
+                if(d.name == name){
+                    fatalities_data = parseFloat(d.value )
+                    fatalities_name = d.name}
+                return d.name == name;
+            })
+            .style("opacity", 1)        // set that bars opacity to 1 to highlight it
+            // add a text element above the bar which displays the value of the bar
+            svg_bar.append('text').attr("class", "highlight_text").text(fatalities_data).attr("x", x1(fatalities_name)+30).attr("y", y1(fatalities_data)+30)
+
+            var fatalities_data1 = 0, fatalities_name1 = '';      // initialize empty data to store the name of the bat and its value
+            svg_bar_deaths.selectAll(".rect3").data(data22).filter(function(d){      // find the bar from fatalities which displays the hovered value in other graph
+                if(d.name == name){
+                    fatalities_data1 = parseFloat(d.value)
+                    fatalities_data2 = ((fatalities_data1)*100).toFixed(2).toString() + '%'
+                    fatalities_name1 = d.name }
+                return d.name == name;
+            })
+            .style("opacity", 1).style("opacity", 1)        // set that bars opacity to 1 to highlight it
+            // add a text element above the bar which displays the value of the bar
+            svg_bar_deaths.append('text').attr("class", "highlight_text").text(fatalities_data2).attr("x", x2(fatalities_name1)+30).attr("y", y2(fatalities_data1)+30)
+            svg_fatalities.append('text').attr("class", "highlight_text").text(d.value.toFixed(2)).attr("x", x3(d.name)+45).attr("y", y3(d.value)+30)
+        }
+
+        function de_highlight(){        // function is used for mouseout event
+            // set the opacity of all bars in all graphs to 100% and remove all added text from mouseover
+            svg_bar_deaths.selectAll(".rect3").style("opacity", 1)
+            svg_fatalities.selectAll(".rect2").style("opacity", 1)
+            svg_bar.selectAll(".rect1").style("opacity", 1)
+            d3.selectAll(".highlight_text").remove()
+        }
+    })
+    </script>
+</body>
